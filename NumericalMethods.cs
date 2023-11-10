@@ -12,7 +12,7 @@ namespace College
         public double Tolerance { get; set; }
         public int Fix { get; set; }
         private bool HasToUseAproximateError { get; set; }
-
+            
         private static string[] BisectionMethodColumns
         {
             get =>
@@ -76,6 +76,12 @@ namespace College
                 double.Parse(tolerance.Trim('%')) : 
                 double.Parse(tolerance);
 
+
+        private double GetAproximateError(
+            double act,
+            double prev) =>
+                Math.Round(Math.Abs((act - prev) / act) * 100, Fix);
+
         private static double[] GetRootInterval(
             Dictionary<double, double> values)
         {
@@ -130,20 +136,27 @@ namespace College
 
             } catch (Exception) 
             {
-                Console.WriteLine(x);
+                Console.WriteLine($"{x} Produces an error on function {Function}");
             } 
 
             return double.NaN;
         }
         
-        public double EvaluateDerivativeOnPoint(
-            double x)
+        public double EvaluateDerivativeOnPoint(double x)
         {
-            FloatingPoint value = Derivative.Evaluate(
-                new Dictionary<string, FloatingPoint>
-                { { "x", x } });
+            try
+            {
+                FloatingPoint value = Derivative.Evaluate(
+               new Dictionary<string, FloatingPoint>
+               { { "x", x } });
 
-            return Math.Round(value.RealValue, Fix);
+                return Math.Round(value.RealValue, Fix);
+            } catch(Exception) 
+            {
+                Console.WriteLine($"{x} Produces an error on function derivate {Derivative}");
+            }
+
+            return double.NaN;
         }
 
         public Dictionary<double, double> EvaluateFunctionOnRange(
@@ -172,10 +185,11 @@ namespace College
 
             if (steps is not null)
             {
-                Dictionary<double, double> valueTable = EvaluateFunctionOnRange(
-                   x1,
-                   x2,
-                   (double)steps);
+                Dictionary<double, double> valueTable = 
+                    EvaluateFunctionOnRange(
+                        x1,
+                        x2,
+                        (double)steps);
 
                 var interval = GetRootInterval(valueTable);
                 x1 = interval[0];
@@ -190,10 +204,10 @@ namespace College
                 double relativeError = Math.Abs((x1 - x2) / 2);
 
                 while (relativeError >= Tolerance || 
-                    EvaluateFunctionOnPoint(xr) == 0)
+                    EvaluateFunctionOnPoint(xr) != 0)
                 {
                     iterations++;
-                    xr = (x1 + x2) / 2;
+                    xr = Math.Round((x1 + x2) / 2, Fix);
 
                     double fx1 = EvaluateFunctionOnPoint(x1),
                         fx2 = EvaluateFunctionOnPoint(x2),
@@ -216,10 +230,14 @@ namespace College
                     else
                         x1 = xr;
 
-                    relativeError = Math.Abs((x1 - x2) / 2);
+                    relativeError = Math.Round(
+                        Math.Abs((x1 - x2) / 2), 
+                        Fix);
 
-                    string jsonData = JsonConvert.SerializeObject(row);
-                    JObject jsonObject = JObject.Parse(jsonData);
+                    string jsonData = JsonConvert
+                        .SerializeObject(row);
+                    JObject jsonObject = JObject
+                        .Parse(jsonData);
 
                     table.Add(jsonObject);
                 }
@@ -239,9 +257,8 @@ namespace College
                     fx2 = EvaluateFunctionOnPoint(x2),
                     fxr = EvaluateFunctionOnPoint(xr);
 
-                    relativeError = previousXr != 0 ?
-                        double.Abs((xr - previousXr) / previousXr) * 100 :
-                        relativeError;
+                    relativeError = GetAproximateError(
+                        xr, previousXr);
 
                     var row = new
                     {
@@ -262,8 +279,11 @@ namespace College
 
                     previousXr = xr;
 
-                    string jsonData = JsonConvert.SerializeObject(row);
-                    JObject jsonObject = JObject.Parse(jsonData);
+                    string jsonData = JsonConvert
+                        .SerializeObject(row);
+                    
+                    JObject jsonObject = JObject
+                        .Parse(jsonData);
 
                     table.Add(jsonObject);
                 }
@@ -312,8 +332,9 @@ namespace College
                     
                     try
                     {
-                        xr = x2 - (fx2 * (x2 - x1) /
-                        (fx2 - fx1));
+                        xr = Math.Round(
+                            x2 - (fx2 * (x2 - x1) / (fx2 - fx1)), 
+                            Fix);
                         fxr = EvaluateFunctionOnPoint(xr);
                     } 
                     catch(DivideByZeroException)
@@ -341,8 +362,11 @@ namespace College
 
                     relativeError = Math.Abs(fxr);
 
-                    string jsonData = JsonConvert.SerializeObject(row);
-                    JObject jsonObject = JObject.Parse(jsonData);
+                    string jsonData = JsonConvert
+                        .SerializeObject(row);
+                    
+                    JObject jsonObject = JObject
+                        .Parse(jsonData);
 
                     table.Add(jsonObject);
                 }
@@ -357,7 +381,6 @@ namespace College
                 {
                     iterations++;
 
-
                     double fx1 = EvaluateFunctionOnPoint(x1),
                         fx2 = EvaluateFunctionOnPoint(x2),
                         xr = 0,
@@ -365,8 +388,9 @@ namespace College
 
                     try
                     {
-                        xr = x2 - (fx2 * (x2 - x1) /
-                        (fx2 - fx1));
+                        xr = Math.Round(
+                            x2 - (fx2 * (x2 - x1) / (fx2 - fx1)), 
+                            Fix);
                         fxr = EvaluateFunctionOnPoint(xr);
                     }
                     catch (DivideByZeroException)
@@ -375,9 +399,9 @@ namespace College
                         throw;
                     }
 
-                    relativeError = previousXr != 0 ?
-                        Math.Abs((xr - previousXr) / previousXr) * 100 :
-                        relativeError;
+                    relativeError = GetAproximateError(
+                        xr, 
+                        previousXr);
 
                     var row = new
                     {
@@ -398,7 +422,8 @@ namespace College
 
                     previousXr = xr;
 
-                    string jsonData = JsonConvert.SerializeObject(row);
+                    string jsonData = JsonConvert
+                        .SerializeObject(row);
                     JObject jsonObject = JObject.Parse(jsonData);
 
                     table.Add(jsonObject);
@@ -433,44 +458,92 @@ namespace College
             int iterations = 0;
             Console.WriteLine($"f'(x) = {Derivative}");
 
-            // Considering that TOL is presented in the format with %.
-            // Must update in the future.
-
             double relativeError = double.PositiveInfinity;
             
             var table = new List<JObject>();
 
-            do
+            if (!HasToUseAproximateError)
             {
-                iterations++;
-
-                double prev_x1 = x1,
-                    prev_fx1 = EvaluateFunctionOnPoint(x1),
-                    prev_der_fx1 = EvaluateDerivativeOnPoint(x1);
-
-                double xr = Math.Round(x1 - prev_fx1 / prev_der_fx1, Fix),
-                    fxr = EvaluateFunctionOnPoint(xr);
-
-                relativeError = Math.Round(Math.Abs(xr - x1) * 100, Fix);
-                x1 = xr;
-
-                var row = new
+                do
                 {
-                    Iteration = iterations,
-                    X1 = prev_x1,
-                    F_X1 = prev_fx1,
-                    Derivative_X1 = prev_der_fx1,
-                    XR = xr,
-                    F_XR = fxr,
-                    Error = relativeError
-                };
+                    iterations++;
 
-                string jsonData = JsonConvert.SerializeObject(row);
-                JObject jsonObject = JObject.Parse(jsonData);
+                    double prev_x1 = x1,
+                        prev_fx1 = EvaluateFunctionOnPoint(x1),
+                        prev_der_fx1 = EvaluateDerivativeOnPoint(x1);
 
-                table.Add(jsonObject);
-            } while (relativeError >= Tolerance);
+                    double xr = Math.Round(
+                        x1 - prev_fx1 / prev_der_fx1, 
+                        Fix),
+                        fxr = EvaluateFunctionOnPoint(xr);
 
+                    relativeError = Math.Round(
+                        Math.Abs(xr - x1) * 100, 
+                        Fix);
+                    
+                    x1 = xr;
+
+                    var row = new
+                    {
+                        Iteration = iterations,
+                        X1 = prev_x1,
+                        F_X1 = prev_fx1,
+                        Derivative_X1 = prev_der_fx1,
+                        XR = xr,
+                        F_XR = fxr,
+                        Error = relativeError
+                    };
+
+                    string jsonData = JsonConvert
+                        .SerializeObject(row);
+                    
+                    JObject jsonObject = JObject
+                        .Parse(jsonData);
+
+                    table.Add(jsonObject);
+                
+                } while (relativeError >= Tolerance);
+            }
+            else
+            {
+                do
+                {
+                    iterations++;
+
+                    double prev_x1 = x1,
+                        prev_fx1 = EvaluateFunctionOnPoint(x1),
+                        prev_der_fx1 = EvaluateDerivativeOnPoint(x1);
+
+                    double xr = Math.Round(
+                        x1 - prev_fx1 / prev_der_fx1, 
+                        Fix),
+                        fxr = EvaluateFunctionOnPoint(xr);
+
+                    relativeError = GetAproximateError(xr, prev_x1);
+                    x1 = xr;
+
+                    var row = new
+                    {
+                        Iteration = iterations,
+                        X1 = prev_x1,
+                        F_X1 = prev_fx1,
+                        Derivative_X1 = prev_der_fx1,
+                        XR = xr,
+                        F_XR = fxr,
+                        Error = relativeError
+                    };
+
+                    string jsonData = JsonConvert
+                        .SerializeObject(row);
+                    
+                    JObject jsonObject = JObject
+                        .Parse(jsonData);
+
+                    table.Add(jsonObject);
+
+                } while (relativeError >= Tolerance);
+
+            }
             var tabulate = new ConsoleTable(NewtonRaphsonMethodColumns);
 
             foreach (var value in table)
@@ -496,52 +569,115 @@ namespace College
             double x2)
         {
             int iterations = 0;
-            double relativeError = Math.Abs(x2-x1) / 2;
+            double relativeError = double.PositiveInfinity;
 
             var table = new List<JObject>();
 
-            while (relativeError >= Tolerance)
+            if (!HasToUseAproximateError)
             {
-                iterations++;
-
-                double fx1 = EvaluateFunctionOnPoint(x1),
-                    fx2 = EvaluateFunctionOnPoint(x2),
-                    xr = 0,
-                    fxr = 0;
-
-                try
+                while (relativeError >= Tolerance)
                 {
-                    xr = x2 - (fx2 * (x2 - x1) /
-                    (fx2 - fx1));
-                    fxr = EvaluateFunctionOnPoint(xr);
+                    iterations++;
+
+                    double fx1 = EvaluateFunctionOnPoint(x1),
+                        fx2 = EvaluateFunctionOnPoint(x2),
+                        xr = 0,
+                        fxr = 0;
+
+                    try
+                    {
+                        xr = Math.Round(x2 - (fx2 * (x2 - x1) /
+                        (fx2 - fx1)),
+                        Fix);
+                        fxr = EvaluateFunctionOnPoint(xr);
+                    }
+                    catch (DivideByZeroException)
+                    {
+                        Console.WriteLine($"{fx2} - {fx1} gives 0.");
+                        throw;
+                    }
+
+                    var row = new
+                    {
+                        Iteration = iterations,
+                        X1 = x1,
+                        X2 = x2,
+                        F_X1 = fx1,
+                        F_X2 = fx2,
+                        XR = xr,
+                        F_XR = fxr,
+                        Error = relativeError
+                    };
+
+                    relativeError = Math.Round(
+                        Math.Abs(x2 - x1) / 2, 
+                        Fix);
+
+                    x1 = x2;
+                    x2 = xr;
+
+                    string jsonData = JsonConvert
+                        .SerializeObject(row);
+                    
+                    JObject jsonObject = JObject
+                        .Parse(jsonData);
+
+                    table.Add(jsonObject);
                 }
-                catch (DivideByZeroException)
+            }
+            else
+            {
+                double previousXr = 0;
+
+                while (relativeError >= Tolerance)
                 {
-                    Console.WriteLine($"{fx2} - {fx1} gives 0.");
-                    throw;
+                    iterations++;
+
+                    double fx1 = EvaluateFunctionOnPoint(x1),
+                        fx2 = EvaluateFunctionOnPoint(x2),
+                        xr = 0,
+                        fxr = 0;
+
+                    try
+                    {
+                        xr = Math.Round(x2 - (fx2 * (x2 - x1) /
+                        (fx2 - fx1)),
+                        Fix);
+                        fxr = EvaluateFunctionOnPoint(xr);
+                    }
+                    catch (DivideByZeroException)
+                    {
+                        Console.WriteLine($"{fx2} - {fx1} gives 0.");
+                        throw;
+                    }
+
+                    var row = new
+                    {
+                        Iteration = iterations,
+                        X1 = x1,
+                        X2 = x2,
+                        F_X1 = fx1,
+                        F_X2 = fx2,
+                        XR = xr,
+                        F_XR = fxr,
+                        Error = relativeError
+                    };
+
+                    relativeError = GetAproximateError(xr, previousXr);
+
+                    x1 = x2;
+                    x2 = xr;
+
+                    previousXr = xr;
+
+                    string jsonData = JsonConvert
+                        .SerializeObject(row);
+
+                    JObject jsonObject = JObject
+                        .Parse(jsonData);
+
+                    table.Add(jsonObject);
                 }
-
-                var row = new
-                {
-                    Iteration = iterations,
-                    X1 = x1,
-                    X2 = x2,
-                    F_X1 = fx1,
-                    F_X2 = fx2,
-                    XR = xr,
-                    F_XR = fxr,
-                    Error = relativeError
-                };
-
-                relativeError = Math.Abs(x2 - x1) / 2;
-
-                x1 = x2;
-                x2 = xr;
-
-                string jsonData = JsonConvert.SerializeObject(row);
-                JObject jsonObject = JObject.Parse(jsonData);
-
-                table.Add(jsonObject);
             }
 
             var tabulate = new ConsoleTable(FalsePositionMethodColumns);
