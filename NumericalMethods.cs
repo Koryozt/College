@@ -2,6 +2,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using ConsoleTables;
 using MathNet.Symbolics;
+using static System.Math;
 
 namespace College
 {
@@ -9,6 +10,7 @@ namespace College
     {
         public SymbolicExpression Function { get; set; }
         public SymbolicExpression Derivative {  get; set; }
+        public string Variable { get; set; }
         public double Tolerance { get; set; }
         public int Fix { get; set; }
         private bool HasToUseAproximateError { get; set; }
@@ -57,18 +59,29 @@ namespace College
                     "Error"
                 };
         }
+        private static string[] FixedPointMethodColumns
+        {
+            get => new string[]{
+                "Iteration",
+                "XO",
+                "G(XO)",
+                "Error"
+            };
+        }
 
         public NumericalMethods(
             int fix, 
+            string variable,
             string tolerance, 
             string function)
         {
             Fix = fix;
+            Variable = variable;
             Tolerance = ParseTolerance(tolerance);
             HasToUseAproximateError = tolerance.Contains('%');
             Function = SymbolicExpression.Parse(function);
             Derivative = Function.Differentiate(
-                SymbolicExpression.Variable("x"));
+                SymbolicExpression.Variable(Variable));
         }
 
         private static double ParseTolerance(string tolerance) =>
@@ -76,11 +89,10 @@ namespace College
                 double.Parse(tolerance.Trim('%')) : 
                 double.Parse(tolerance);
 
-
         private double GetAproximateError(
             double act,
             double prev) =>
-                Math.Round(Math.Abs((act - prev) / act) * 100, Fix);
+                Round(Abs((act - prev) / act) * 100, Fix);
 
         private static double[] GetRootInterval(
             Dictionary<double, double> values)
@@ -124,15 +136,37 @@ namespace College
             return foundInterval!;
         }
 
-        public double EvaluateFunctionOnPoint(double x)
+        private bool CanUseMethod(
+            RootMethods method, 
+            double a, 
+            double b)
+        {
+            switch(method)
+            {
+                case RootMethods.FixedPoint:
+                    double a_eval = Eval(a),
+                            b_eval = Eval(b),
+                            a_deval = EvalDerivative(a-0.01),
+                            b_deval = EvalDerivative(b-0.01);
+
+                    return a_eval >= a && a_eval <= b &&
+                        b_eval >= a && b_eval <= b &&
+                        a_deval < 1 && b_deval < 1;
+
+                default:
+                    return false;
+            };
+        }
+
+        public double Eval(double x)
         {
             try 
             {
                 FloatingPoint result = Function.Evaluate(
                     new Dictionary<string, FloatingPoint> 
-                    { { "x", x } });
+                    { { Variable, x } });
 
-                return Math.Round(result.RealValue, Fix);
+                return Round(result.RealValue, Fix);
 
             } catch (Exception) 
             {
@@ -142,15 +176,15 @@ namespace College
             return double.NaN;
         }
         
-        public double EvaluateDerivativeOnPoint(double x)
+        public double EvalDerivative(double x)
         {
             try
             {
                 FloatingPoint value = Derivative.Evaluate(
                new Dictionary<string, FloatingPoint>
-               { { "x", x } });
+               { { Variable, x } });
 
-                return Math.Round(value.RealValue, Fix);
+                return Round(value.RealValue, Fix);
             } catch(Exception) 
             {
                 Console.WriteLine($"{x} Produces an error on function derivate {Derivative}");
@@ -159,7 +193,7 @@ namespace College
             return double.NaN;
         }
 
-        public Dictionary<double, double> EvaluateFunctionOnRange(
+        public Dictionary<double, double> EvalOnRange(
             double from,
             double to,
             double steps)
@@ -170,7 +204,7 @@ namespace College
                 i <= to;
                 i += steps)
             {
-                valueTable[Math.Round(i, Fix)] = EvaluateFunctionOnPoint(i);
+                valueTable[Round(i, Fix)] = Eval(i);
             }
 
             return valueTable;
@@ -186,7 +220,7 @@ namespace College
             if (steps is not null)
             {
                 Dictionary<double, double> valueTable = 
-                    EvaluateFunctionOnRange(
+                    EvalOnRange(
                         x1,
                         x2,
                         (double)steps);
@@ -201,17 +235,17 @@ namespace College
 
             if (!HasToUseAproximateError)
             {
-                double relativeError = Math.Abs((x1 - x2) / 2);
+                double relativeError = Abs((x1 - x2) / 2);
 
                 while (relativeError >= Tolerance || 
-                    EvaluateFunctionOnPoint(xr) != 0)
+                    Eval(xr) != 0)
                 {
                     iterations++;
-                    xr = Math.Round((x1 + x2) / 2, Fix);
+                    xr = Round((x1 + x2) / 2, Fix);
 
-                    double fx1 = EvaluateFunctionOnPoint(x1),
-                        fx2 = EvaluateFunctionOnPoint(x2),
-                        fxr = EvaluateFunctionOnPoint(xr);
+                    double fx1 = Eval(x1),
+                        fx2 = Eval(x2),
+                        fxr = Eval(xr);
 
                     var row = new
                     {
@@ -230,8 +264,8 @@ namespace College
                     else
                         x1 = xr;
 
-                    relativeError = Math.Round(
-                        Math.Abs((x1 - x2) / 2), 
+                    relativeError = Round(
+                        Abs((x1 - x2) / 2), 
                         Fix);
 
                     string jsonData = JsonConvert
@@ -251,11 +285,11 @@ namespace College
                 {
                     iterations++;
 
-                    xr = Math.Round((x1 + x2) / 2, Fix);
+                    xr = Round((x1 + x2) / 2, Fix);
 
-                    double fx1 = EvaluateFunctionOnPoint(x1),
-                    fx2 = EvaluateFunctionOnPoint(x2),
-                    fxr = EvaluateFunctionOnPoint(xr);
+                    double fx1 = Eval(x1),
+                    fx2 = Eval(x2),
+                    fxr = Eval(xr);
 
                     relativeError = GetAproximateError(
                         xr, previousXr);
@@ -325,17 +359,17 @@ namespace College
                 {
                     iterations++;
 
-                    double fx1 = EvaluateFunctionOnPoint(x1),
-                        fx2 = EvaluateFunctionOnPoint(x2),
+                    double fx1 = Eval(x1),
+                        fx2 = Eval(x2),
                         xr = 0,
                         fxr = 0;
                     
                     try
                     {
-                        xr = Math.Round(
+                        xr = Round(
                             x2 - (fx2 * (x2 - x1) / (fx2 - fx1)), 
                             Fix);
-                        fxr = EvaluateFunctionOnPoint(xr);
+                        fxr = Eval(xr);
                     } 
                     catch(DivideByZeroException)
                     {
@@ -360,7 +394,7 @@ namespace College
                     else
                         x1 = xr;
 
-                    relativeError = Math.Abs(fxr);
+                    relativeError = Abs(fxr);
 
                     string jsonData = JsonConvert
                         .SerializeObject(row);
@@ -381,8 +415,8 @@ namespace College
                 {
                     iterations++;
 
-                    double fx1 = EvaluateFunctionOnPoint(x1),
-                        fx2 = EvaluateFunctionOnPoint(x2),
+                    double fx1 = Eval(x1),
+                        fx2 = Eval(x2),
                         xr = 0,
                         fxr = 0;
 
@@ -391,7 +425,7 @@ namespace College
                         xr = Math.Round(
                             x2 - (fx2 * (x2 - x1) / (fx2 - fx1)), 
                             Fix);
-                        fxr = EvaluateFunctionOnPoint(xr);
+                        fxr = Eval(xr);
                     }
                     catch (DivideByZeroException)
                     {
@@ -469,16 +503,16 @@ namespace College
                     iterations++;
 
                     double prev_x1 = x1,
-                        prev_fx1 = EvaluateFunctionOnPoint(x1),
-                        prev_der_fx1 = EvaluateDerivativeOnPoint(x1);
+                        prev_fx1 = Eval(x1),
+                        prev_der_fx1 = EvalDerivative(x1);
 
-                    double xr = Math.Round(
+                    double xr = Round(
                         x1 - prev_fx1 / prev_der_fx1, 
                         Fix),
-                        fxr = EvaluateFunctionOnPoint(xr);
+                        fxr = Eval(xr);
 
-                    relativeError = Math.Round(
-                        Math.Abs(xr - x1) * 100, 
+                    relativeError = Round(
+                        Abs(xr - x1) * 100, 
                         Fix);
                     
                     x1 = xr;
@@ -511,13 +545,13 @@ namespace College
                     iterations++;
 
                     double prev_x1 = x1,
-                        prev_fx1 = EvaluateFunctionOnPoint(x1),
-                        prev_der_fx1 = EvaluateDerivativeOnPoint(x1);
+                        prev_fx1 = Eval(x1),
+                        prev_der_fx1 = EvalDerivative(x1);
 
-                    double xr = Math.Round(
+                    double xr = Round(
                         x1 - prev_fx1 / prev_der_fx1, 
                         Fix),
-                        fxr = EvaluateFunctionOnPoint(xr);
+                        fxr = Eval(xr);
 
                     relativeError = GetAproximateError(xr, prev_x1);
                     x1 = xr;
@@ -579,17 +613,17 @@ namespace College
                 {
                     iterations++;
 
-                    double fx1 = EvaluateFunctionOnPoint(x1),
-                        fx2 = EvaluateFunctionOnPoint(x2),
+                    double fx1 = Eval(x1),
+                        fx2 = Eval(x2),
                         xr = 0,
                         fxr = 0;
 
                     try
                     {
-                        xr = Math.Round(x2 - (fx2 * (x2 - x1) /
+                        xr = Round(x2 - (fx2 * (x2 - x1) /
                         (fx2 - fx1)),
                         Fix);
-                        fxr = EvaluateFunctionOnPoint(xr);
+                        fxr = Eval(xr);
                     }
                     catch (DivideByZeroException)
                     {
@@ -609,8 +643,8 @@ namespace College
                         Error = relativeError
                     };
 
-                    relativeError = Math.Round(
-                        Math.Abs(x2 - x1) / 2, 
+                    relativeError = Round(
+                        Abs(x2 - x1) / 2, 
                         Fix);
 
                     x1 = x2;
@@ -633,17 +667,17 @@ namespace College
                 {
                     iterations++;
 
-                    double fx1 = EvaluateFunctionOnPoint(x1),
-                        fx2 = EvaluateFunctionOnPoint(x2),
+                    double fx1 = Eval(x1),
+                        fx2 = Eval(x2),
                         xr = 0,
                         fxr = 0;
 
                     try
                     {
-                        xr = Math.Round(x2 - (fx2 * (x2 - x1) /
+                        xr = Round(x2 - (fx2 * (x2 - x1) /
                         (fx2 - fx1)),
                         Fix);
-                        fxr = EvaluateFunctionOnPoint(xr);
+                        fxr = Eval(xr);
                     }
                     catch (DivideByZeroException)
                     {
@@ -699,6 +733,67 @@ namespace College
             Console.WriteLine();
 
             return table;
+        }
+
+        public double FixedPointMethod(
+            double x1,
+            double? x2 = null)
+        {
+            int iterations = 0;
+            double relativeError = double.PositiveInfinity;
+
+            var table = new List<JObject>();
+
+            if (!CanUseMethod(RootMethods.FixedPoint, x1, (double)x2))
+                return double.NaN;
+
+            double xo = Round(
+                x2 is null ? x1 : (x1 + (double)x2) / 2,
+                Fix);
+
+            do
+            {
+                iterations++;
+
+                double temp = xo;
+                xo = Eval(temp);
+                var row = new
+                {
+                    Iteration = iterations,
+                    XO = temp,
+                    G_XO = xo,
+                    Error = relativeError
+                };
+
+                relativeError = temp - xo != 0 ?
+                    GetAproximateError(xo, temp) :
+                    relativeError;
+
+                string jsonData = JsonConvert
+                    .SerializeObject(row);
+
+                JObject jsonObject = JObject
+                    .Parse(jsonData);
+
+                table.Add(jsonObject);
+
+            } while (relativeError >= Tolerance);
+
+            var tabulate = new ConsoleTable(FixedPointMethodColumns);
+
+            foreach (var value in table)
+            {
+                tabulate.AddRow(
+                    value["Iteration"],
+                    value["XO"],
+                    value["G_XO"],
+                    value["Error"]);
+            }
+
+            tabulate.Write();
+            Console.WriteLine();
+
+            return xo;
         }
     }
 }
